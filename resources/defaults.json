@@ -1,0 +1,38 @@
+{
+    "nom": "MADRUGA José",
+    "commune": "Cognac (16102)",
+    "soustitre": "Baú do Chaves",
+    "technique": "Forés Tarière Creuse",
+    "affaire": "12345",
+    "maitre": "Kikuo",
+    "promoteur": "Seu Barriga",
+    "geotechnicien": "Prof. Girafalles",
+    "beton_type": "C30/37",
+    "type_acier": "Acier HA - Fe E500 A ou B",
+    "diameter_option": "Un seul diamètre",
+    "sismicite": "Zone 3 (modérée)",
+    "type_batiment": "II",
+    "documents_marche": [
+        "G2 PRO",
+        "DDC"
+    ],
+    "selection_resultats": ["pieu", "Vmax ELSC (t)", "Vmax ELSQP (t)", "Vmax ELU FOND / Sis (t)", "Rc;cr;d carac [T]", "Rc;cr;d quasi-p [T]", "Rc;d ELU [T]", "Kp", "Diamètre (m)", "LG retenue/ ref. (m)" , "CR Utile"],
+    "selection_synthese": ["cas", "pieu","Diamètre (m)","LG retenue/ ref. (m)","CR Utile"],
+    "selection_diameters": ["Pieux", "Diamètre", "Cmax", "k1", "k2", "fck*","σmoy lim", "Vmax ELS C" ],
+    "selection_horizontal": [
+    "N°",
+    "Diamètre",
+    "T (t)",
+    "M (t.m)",
+    "Vmin (t)",
+    "Mmax (t.m)",
+    "δ (mm)",
+    "M<ø/8",
+    "T (t).2",
+    "M (t.m).2",
+    "Vmin (t).2",
+    "Mmax (t.m).2",
+    "δ (mm).2",
+    "M<ø/8.2"
+]
+}

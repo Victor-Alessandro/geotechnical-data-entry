@@ -1,0 +1,32 @@
+Centralize state initialization, currently global variables are instantiated at each page.
+
+Filter text sections into predefined categories, join the phrases they occur and use them to predict default values.
+
+Add chunkr option.
+
+
+I tried to force a solution and well that just didnt work, I have to take it step by step. I dont expect anything amazing but by adding redundancy I think it will work fine, I've been very light on computational resources, but I will be more gourmand. I'm slightly concerned about the total time taken, but most computations can be done in parallel:
+
+Verify which columns contain similar content to one another, not the types, but the actual floating point values and levehnstein distance for strings in most cells.
+
+Count co-ocurrences of values found, and verify the context they appear if related to any of the topics then add a positive point normalize, by the total of co-occurences (look into voting algorithms). I'll give a small bonus whenever it appears in a table but not try to classify it.
+
+retain the best case.
+
++
+
+LLM
+
++
+
+HMM( pour les classes de sol surtout )
+
+
+
+Missing files for different beton and acier types
+
+
+O RAPPORT (｡•́︿•̀｡)
+
+
+Extra: Learn the most convennient way of instantiating a python venv then do git init but ignore venv specific files on arch
