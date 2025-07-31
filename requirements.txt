@@ -5,7 +5,7 @@ docxtpl==0.20.0
 fitz==0.0.1.dev2
 geopandas==1.0.1
 matplotlib==3.10.3
-numpy==2.3.2
+numpy==1.26.4
 opencv_python==4.11.0.86
 opencv_python_headless==4.11.0.86
 option==2.1.0
