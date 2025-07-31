@@ -2,7 +2,7 @@
 # syntax=docker/dockerfile:1
 
 #### Stage 1: Build ####
-FROM python:3.13-alpine3.18 AS builder
+FROM python:3.12-alpine AS builder
 
 # install system dependencies for streamlit, geo libraries, ghostscript, git, curl
 RUN apk add --no-cache \
