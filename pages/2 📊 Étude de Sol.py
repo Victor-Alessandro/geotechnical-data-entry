@@ -1,17 +1,16 @@
 import json
 import os
-import io
 import streamlit as st
 import pandas as pd
+import fitz
 
 from streamlit_extras.pdf_viewer import pdf_viewer
 from typing import List, Dict, Any
-from PyPDF2 import PdfReader
 
-from utils import geo4 as geo
+from utils import geo
 
 # ==============================================================================
-# 1. UI COMPONENTS
+# 2. UI COMPONENTS
 # ==============================================================================
 
 def display_table_analysis_results(results: List[Dict[str, Any]], num_to_show: int) -> List[str]:
@@ -29,8 +28,8 @@ def display_table_analysis_results(results: List[Dict[str, Any]], num_to_show: i
         
         with st.container(border=True):
             st.markdown(f"**Page {page}**")
-            st.data_editor(df, use_container_width=True, key=f"editor_{result['df_index']}")
-
+            st.data_editor(df, use_container_width=True)
+            
             rank_key = f"rating_{result['df_index']}"
             default_bool = 0 if result_rank < 3 else 1
             
@@ -96,18 +95,17 @@ def display_main_interface():
     st.divider()
     st.write("### Tableaux du Document")
 
-    num_to_show = len(results)
-    if num_to_show> 1:
-        num_to_show = st.slider(
-            "Tableaux à afficher :", 
-            min_value=1, 
-            max_value= num_to_show, 
-            value=min(5, num_to_show or 1), 
-            step=1
-        )
+    num_to_show = st.slider(
+        "Tableaux à afficher :", 
+        min_value=1, 
+        max_value=max(1, len(results)), 
+        value=min(5, len(results) or 1), 
+        step=1
+    )
 
     selected_tables = display_table_analysis_results(results, num_to_show)
     
+    # Update pertinent table based on selections
     if selected_tables and results:
         pertinent_dfs = [
             result['df'] for result, selected in zip(results[:num_to_show], selected_tables) 
@@ -138,7 +136,7 @@ def handle_json_upload_shortcut():
                 st.session_state.document_tables = tables
                 st.session_state.etude_sol_uploaded = True
                 st.session_state.raccourci_loaded = True
-                st.session_state['ocr_result'] = json_data
+                st.session_state['aryn_result'] = json_data
                 st.success(f"🎉 {len(tables)} tableaux extraits du document!")
                 st.rerun()
             else:
@@ -147,112 +145,6 @@ def handle_json_upload_shortcut():
             st.error("Erreur: Le fichier n'est pas un JSON valide.")
         except Exception as e:
             st.error(f"Erreur lors du traitement du fichier JSON: {str(e)}")
-
-
-def display_categorized_results(categorized_phrases: Dict[str, List[Dict[str, Any]]]):
-    """
-    Display the categorized phrases in a 3-column layout, with each match
-    as a separate item.
-    """
-    st.header("Informations Extraites")
-    
-    active_categories = {
-        name: phrases for name, phrases in categorized_phrases.items() if phrases
-    }
-
-    if not active_categories:
-        st.info("Aucune information pertinente n'a été trouvée selon les règles définies.")
-        return
-
-    category_names = list(active_categories.keys())
-
-    cols = st.columns(3)
-
-    for i, name in enumerate(category_names):
-        with cols[i % 3]:
-            results = active_categories[name]
-            
-            with st.expander(f"##### {name}"):
-
-                # Loop through each result and display it on a new line
-                # with a bullet point for clarity.
-                for result in results:
-                    st.markdown(
-                        f"&bull; {result['highlighted']} *:small[(p. {result['page']})]*", 
-                        unsafe_allow_html=True
-                    )
-
-def text_extraction_interface():
-    """
-    Main interface orchestrator.
-    """
-    if 'nlp' not in st.session_state:
-        st.session_state['nlp'] = geo.get_spacy_nlp()
-    
-    if 'ocr_result' in st.session_state and st.session_state['nlp']:
-        nlp = st.session_state['nlp']
-        
-        if 'extracted_items' not in st.session_state:
-            with st.spinner("Analyse du document..."):
-                st.session_state['extracted_items'] = geo.extract_items_from_elements(
-                    st.session_state['ocr_result'], nlp
-                )
-        
-        items = st.session_state['extracted_items']
-        
-        categorized_results = geo.run_extraction_pipeline(items, geo.EXTRACTION_CONFIGS, nlp)
-        
-        display_categorized_results(categorized_results)
-
-    st.divider()
-            
-    json_filename = "etude_de_sol.json"
-    json_str = json.dumps(st.session_state.get('ocr_result', {}), indent=2, ensure_ascii=False)
-    st.download_button(
-        label="📥 Télécharger le résultat JSON",
-        data=json_str,
-        file_name=json_filename,
-        mime="application/json"
-    )
-
-
-def process_selected_pages( parsing_service, temp_pdf_path, use_ocr ):
-    try:
-        result, error_msg = parsing_service( temp_pdf_path, use_ocr )
-        
-        if error_msg:
-            st.error(f"❌ Échec du traitement: {error_msg}")
-            st.warning("""
-            **Suggestions pour résoudre le problème:**
-            - Vérifiez que le fichier PDF n'est pas corrompu
-            - Essayez de réduire le nombre de pages sélectionnées
-            - Si le document contient beaucoup d'images, essayez de désactiver l'OCR temporairement
-            - Vérifiez votre connexion internet
-            """)
-
-        # result = json data from aryn / chunkr
-        elif result:
-            st.session_state['ocr_result'] = result
-            
-            st.success("✅ Document traité avec succès!")
-            
-            # Parse and store tables
-            tables = geo.parse_tables_from_json(result)
-            if tables:
-                st.session_state.document_tables = tables
-                st.session_state.etude_sol_uploaded = True
-                st.success(f"🎉 {len(tables)} tableaux extraits du document!")
-                st.rerun()
-            else:
-                st.info("ℹ️ Aucun tableau détecté dans les pages sélectionnées.")
-        else:
-            st.error("❌ Aucun résultat retourné par l'API")
-            
-    finally:
-        try:
-            os.unlink(temp_pdf_path)
-        except:
-            pass
 
 def handle_pdf_upload_and_analysis():
     """Handle PDF upload, preview, and analysis workflow."""
@@ -266,10 +158,10 @@ def handle_pdf_upload_and_analysis():
     
     if uploaded_pdf:
         pdf_bytes = uploaded_pdf.getvalue()
-            
-        reader = PdfReader( io.BytesIO( pdf_bytes) )
-        num_pages = len(reader.pages)        
-
+        
+        with fitz.open(stream=pdf_bytes, filetype="pdf") as pdf:
+            num_pages = len(pdf)
+        
         col1, col2 = st.columns([3, 1])
         
         with col1:
@@ -296,15 +188,43 @@ def handle_pdf_upload_and_analysis():
             if st.button("🔍 Analyser le document avec Aryn", type="primary"):
                 with st.spinner("Traitement du document en cours..."):
                     temp_pdf_path = geo.create_filtered_pdf(pdf_bytes, selected_pages)
+                    
+                    try:
+                        result, error_msg = geo.process_with_aryn(temp_pdf_path, use_ocr)
+                        
+                        if error_msg:
+                            st.error(f"❌ Échec du traitement Aryn: {error_msg}")
+                            st.warning("""
+                            **Suggestions pour résoudre le problème:**
+                            - Vérifiez que le fichier PDF n'est pas corrompu
+                            - Essayez de réduire le nombre de pages sélectionnées
+                            - Si le document contient beaucoup d'images, essayez de désactiver l'OCR temporairement
+                            - Vérifiez votre connexion internet
+                            """)
 
-                    process_selected_pages( geo.process_with_aryn, temp_pdf_path, use_ocr )
-
-
-            if st.button( "Analyser le document avec Chunkr" ):
-                with st.spinner("Traitement du document en cours..."):
-                    temp_pdf_path = geo.create_filtered_pdf(pdf_bytes, selected_pages)
-
-                    process_selected_pages( geo.process_with_chunkr, temp_pdf_path, use_ocr )                    
+                        # result = json data from aryn
+                        elif result:
+                            st.session_state['aryn_result'] = result
+                            
+                            st.success(f"✅ Document traité avec succès! {len(selected_pages)} pages analysées.")
+                            
+                            # Parse and store tables
+                            tables = geo.parse_tables_from_json(result)
+                            if tables:
+                                st.session_state.document_tables = tables
+                                st.session_state.etude_sol_uploaded = True
+                                st.success(f"🎉 {len(tables)} tableaux extraits du document!")
+                                st.rerun()
+                            else:
+                                st.info("ℹ️ Aucun tableau détecté dans les pages sélectionnées.")
+                        else:
+                            st.error("❌ Aucun résultat retourné par l'API Aryn")
+                            
+                    finally:
+                        try:
+                            os.unlink(temp_pdf_path)
+                        except:
+                            pass
 
     with st.expander( 'raccourci'):
         handle_json_upload_shortcut()
@@ -333,39 +253,30 @@ def table_extraction_interface():
     os.environ['GEMINI_API_KEY'] = st.secrets['GOOGLE_API_KEY']
     with processing_container:
         if extract_button:
-            simpler_columns = geo.clean_column_names( st.session_state.pertinent_table )         
-            result  = geo.placeholder_process_geotechnical_data( simpler_columns )
 
-            st.session_state.final_geo_data = simpler_columns[result.output.names_of_columns_used_for_extraction]
+            st.dataframe( st.session_state.pertinent_table)
+            st.divider()
+            
+            result  = geo.process_geotechnical_data( st.session_state.pertinent_table )
 
-            cols_to_convert = [0, 2]
-            for col in cols_to_convert:
-                if col < len(st.session_state.final_geo_data.columns):
-                    st.session_state.final_geo_data.iloc[:, col] = pd.to_numeric(
-                        st.session_state.final_geo_data.iloc[:, col], 
-                        errors='ignore'
-                    )
-
-            st.dataframe( st.session_state.final_geo_data )
+            st.dataframe( st.session_state.pertinent_table[result.output.names_of_columns_used_for_extraction] )
             
     with interface_container:
         display_main_interface()
 
-
 # ==============================================================================
-# 2. MAIN APPLICATION
+# 3. MAIN APPLICATION
 # ==============================================================================
 
 def landing_page():
-    """Application entry point."""
+    """Main application entry point."""
     st.set_page_config(
         page_title="Analyseur de Tableaux de Documents", 
         page_icon="📊", 
         layout='wide'
     )
-    
     st.title("📊 Analyseur de Tableaux de Documents")
-
+    
     geo.initialize_session_state()
     
     if not st.session_state.etude_sol_uploaded:
@@ -375,9 +286,18 @@ def landing_page():
         
         with tab1:
             table_extraction_interface()
-
+        
         with tab2:
-            text_extraction_interface()
+            # TEMPORARY 
+            # Offer download
+            json_filename = "etude_de_sol.json"
+            json_str = json.dumps(st.session_state['aryn_result'] , indent=2, ensure_ascii=False)
+            st.download_button(
+                label="📥 Télécharger le résultat JSON",
+                data=json_str,
+                file_name=json_filename,
+                mime="application/json"
+            )
 
 if __name__ == "__main__":
     landing_page()

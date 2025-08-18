@@ -3,7 +3,6 @@ from io import BytesIO
 from docx.shared import Mm
 from hashlib import md5
 from itertools import chain
-from pdf2image import convert_from_bytes, convert_from_path
 
 import streamlit as st
 import pandas as pd
@@ -12,13 +11,14 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import contextily as ctx
 import numpy as np
-import io
 import math
 import cv2
 import json
 import os
 import tempfile
 import shutil
+import fitz
+import io
 import requests
 import gc
 
@@ -245,33 +245,30 @@ def highlight_coordinates():
 
 def convert_pdf_to_image(pdf_input):
     """
-    Convert the first page of a PDF to PNG using pdf2image.
+    Convert the first page of a PDF to an image compatible with Streamlit.
 
     Parameters:
-    - pdf_input: file path (str or Path) or file-like object (e.g., BytesIO)
+    - pdf_input: file path (str) or file-like object (e.g., BytesIO from Streamlit uploader)
 
     Returns:
-    - BytesIO: PNG image of the first page
+    - BytesIO containing PNG image data of the first PDF page
     """
-    try:
-        if hasattr(pdf_input, "read"):
-            # Read from file-like object (e.g., BytesIO)
-            pdf_bytes = pdf_input.read()
-            images = convert_from_bytes(pdf_bytes, first_page=1, last_page=1)
-        else:
-            # Read from file path
-            images = convert_from_path(pdf_input, first_page=1, last_page=1)
+    if hasattr(pdf_input, "read"):
+        pdf_bytes = pdf_input.read() 
+        pdf_input.seek(0)
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    else:
+        doc = fitz.open(pdf_input)
 
-        if not images:
-            raise ValueError("PDF contains no pages.")
+    if doc.page_count < 1:
+        raise ValueError("PDF contains no pages.")
+    page = doc.load_page(0)
 
-        img_io = io.BytesIO()
-        images[0].save(img_io, format="PNG")
-        img_io.seek(0)
-        return img_io
+    pix = page.get_pixmap(alpha=False)
+    img_bytes = pix.tobytes(output="png")
 
-    except Exception as e:
-        raise RuntimeError(f"Failed to convert PDF to image: {e}")
+    return io.BytesIO(img_bytes)
+
 
 # --- Excel, Text and Generation ---
 
@@ -613,16 +610,18 @@ class DataManager:
         except Exception as e:
             st.toast(f"Erreur lors du chargement des valeurs par défaut: {str(e)}", icon="⚠️")
         
+        # Ensure new variables are empty lists if not in JSON
         for key in ["selection_horizontal","selection_synthese", "selection_resultats", "selection_diameters", "selected_dataframe"]:
             if key not in defaults or defaults[key] is None:
                 defaults[key] = []
         
+        # Store defaults for reference
         self.session_state['defaults'] = defaults
         return defaults
     
     def initialize_session_state(self, defaults):
         """Initialize session state with default values"""
-
+        # Initialize geographic and map related keys
         geographic_keys = ['selected_gdf', 'selected_name', 'selected_departement', 
                           'insee_code', 'commune_map_buffer', 'highlighted_image']
         
@@ -651,6 +650,7 @@ class DataManager:
             if key not in self.session_state:
                 self.session_state[key] = {}
         
+        # Process default commune if available
         default_commune = defaults.get("commune")
         if (default_commune and 
             self.session_state.selected_gdf is None and 
@@ -675,6 +675,7 @@ class DataManager:
                         self.session_state.selected_name = commune_name
                         self.session_state.selected_departement = str(match.iloc[0]['departemen'])
                         
+                        # Update seismic zone if available
                         seismic_zones = {
                             '1 - Très faible': "Zone 1 (très faible)",
                             '2 - Faible': "Zone 2 (faible)",
@@ -718,21 +719,25 @@ def horizontal_details_un_pieux(df: pd.DataFrame) -> dict:
         'tete', 'T', 'M', 'delta', 'Max', 'Tmax',
     ]
 
+    # Define cell ranges
     ranges = [
         get_range("K3", "K11"),
         get_range("P3", "P6"),
         get_range("V3", "V5"),
     ]
 
+    # Flatten list of cell coordinates
     all_coords = list(chain.from_iterable(ranges))
 
     if len(horiz_list) != len(all_coords):
         raise ValueError("Mismatch between horiz_list and cell range size.")
 
+    # Extract and assign values from df
     values = [df.iat[r, c] for r, c in all_coords]
     return dict(zip(horiz_list, values))
 
 
+# this function modifies x if it has commas
 def format_if_numeric(x):
     if pd.isna(x):
         return ""

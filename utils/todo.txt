@@ -1,6 +1,9 @@
 Centralize state initialization, currently global variables are instantiated at each page.
 
-Filter text sections into predefined categories (done!), join the phrases they occur and use them to predict default values.
+Filter text sections into predefined categories, join the phrases they occur and use them to predict default values.
+
+Add chunkr option.
+
 
 I tried to force a solution and well that just didnt work, I have to take it step by step. I dont expect anything amazing but by adding redundancy I think it will work fine, I've been very light on computational resources, but I will be more gourmand. I'm slightly concerned about the total time taken, but most computations can be done in parallel:
 
@@ -20,75 +23,10 @@ HMM( pour les classes de sol surtout )
 
 
 
-To get familiarized with the application and get yourself aligned with expectations. Harmonize the application by ensuring consistent naming schemes, standardized error messages, warnings, st.toast, st.success, st.info, st.help, st.write, st.button, st.expander... and empirically organizing the ideal placement of each component. Visually, the application ought to be uncluttered.
-
-
-
-Centralize state initialization, currently global variables are instantiated at each page.
-
-More descriptive and consistent folder names and have subfolders in resources for different files (docx; images; excel). Leave defaults on the main page.
-
-multiselect options are not optimally designed (neither their affichage nor how they were coded)
-
-I'd like to have an ai agent critique my application. Reading through my repo and asking me enough questions about it so we uncover new approaches. More concretely, how to :
-
-Reduce the application "moving parts".
-Reduce and simplify state management (fewer variables in session_state)
-Consider introducing a sqlite file, to help with memory management and reducing global variables.
-Improve performance of the applications ai i.e. improve the accuracy of the OCR extraction, fuzzy algorithms, counting algorithms and LLM uses.
-
-
-
-
-It is easier to say portions could probably be done in a better way than to the work.
-Following naming conventions, comments...
-
-
-
-Missing files for different beton types
-
-Type acier is not really being used, the difference between both acier cases falls entirely into whether or not the horizontal file is also uploaded. Therefore, remove all its mentions including from defaults.json
+Missing files for different beton and acier types
 
 
 O RAPPORT (｡•́︿•̀｡)
 
 
-Extra: I have instantiated a python venv then do git init but ignore venv specific files on arch
-
-/home/serendipity/app/lib/python3.13/site-packages/openpyxl/worksheet/_reader.py:329: UserWarning: Data Validation extension is not supported and will be removed
-  warn(msg)
-/home/serendipity/app/utils/ndc.py:842: FutureWarning: DataFrame.applymap has been deprecated. Use DataFrame.map instead.
-  display_df_hyp = df_hyp_filtered_for_doc.applymap(format_if_numeric).copy()
-/home/serendipity/app/lib/python3.13/site-packages/openpyxl/worksheet/_reader.py:329: UserWarning: Data Validation extension is not supported and will be removed
-  warn(msg)
-/home/serendipity/app/utils/ndc.py:858: FutureWarning: DataFrame.applymap has been deprecated. Use DataFrame.map instead.
-  display_df_verif = verif_df_raw.applymap(format_if_numeric).copy()
-/home/serendipity/app/utils/ndc.py:878: FutureWarning: DataFrame.applymap has been deprecated. Use DataFrame.map instead.
-  display_df_diam = diam_df_raw.applymap(format_if_numeric).copy()
-
-
-instead of loading from defaults.json, it should check if a different temporary json file was created,
-auquel cas that should be loaded instead. ONLY for note de calcul.
-
-si il n'y a pas Em it should be filled with nans until it reaches the same size as the other columns
-
-
-
-can I use sentence tranformers to detect setences with low semantic meaning ?
-
-
-
-
-
-
-
-_ _ _
-
-container + Excel download + rapport
-
-default.json creation + sqlite (make the app faster and the code simpler) and its done
-
-label studio if time and will align
-
-_ _ _ 
-
+Extra: Learn the most convennient way of instantiating a python venv then do git init but ignore venv specific files on arch

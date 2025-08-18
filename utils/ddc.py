@@ -1,16 +1,14 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
+import fitz  # PyMuPDF
 import threading
 import camelot
-import io
 import gc
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Optional, Tuple, List
 from functools import lru_cache
-from pdf2image import convert_from_path
-from PyPDF2 import PdfReader
 
 class ProgressTracker:
     def __init__(self, total_pages: int):
@@ -65,50 +63,44 @@ def detect_paper_size(width_mm: float, height_mm: float) -> str:
 
 def convert_pdf_to_image(pdf_path: str, page_num: int = 0, dpi: int = 120) -> Tuple[bytes, str, Optional[np.ndarray]]:
     """
-    Convert a PDF page to an image in memory, with optional preprocessing.
+    Convertir une page PDF en image en mémoire, avec option de prétraitement optimisé.
     
     Args:
-        pdf_path: Path to the PDF file
-        page_num: Page number to convert (zero-based)
-        dpi: Resolution in DPI
+        pdf_path: Chemin vers le fichier PDF
+        page_num: Numéro de page à convertir
+        dpi: DPI pour la conversion d'image
         
     Returns:
-        Tuple: (image bytes in PNG format, paper size string, optional preprocessed image as NumPy array)
+        Tuple (octets de l'image, format du papier, image prétraitée comme tableau numpy si applicable)
     """
-    image_bytes = None
-    paper_size = "Unknown"
-    preprocessed_array = None
-
+    doc = None
+    pixmap = None
+    
     try:
-        # Load page image
-        images = convert_from_path(pdf_path, dpi=dpi, first_page=page_num + 1, last_page=page_num + 1)
-        if not images:
-            raise ValueError("No image returned by pdf2image.")
-        image = images[0]
-
-        # Encode to PNG bytes
-        img_buf = io.BytesIO()
-        image.save(img_buf, format="PNG")
-        image_bytes = img_buf.getvalue()
-
-        # Get page size using PyPDF2
-        reader = PdfReader(pdf_path)
-        page = reader.pages[page_num]
-        width_pt = float(page.mediabox.width)
-        height_pt = float(page.mediabox.height)
-        width_mm = width_pt * 0.3528
-        height_mm = height_pt * 0.3528
+        doc = fitz.open(pdf_path)
+        page = doc[page_num]
+        
+        matrix = fitz.Matrix(dpi/72, dpi/72)
+        pixmap = page.get_pixmap(matrix=matrix, alpha=False)
+        
+        img_bytes = pixmap.tobytes("png")
+        
+        width, height = page.rect.width, page.rect.height
+        width_mm = width * 0.3528
+        height_mm = height * 0.3528
         paper_size = detect_paper_size(width_mm, height_mm)
-
-        # Optional: convert to NumPy array if needed
-        preprocessed_array = np.array(image)
-
-        return image_bytes, paper_size, preprocessed_array
-
+        
+        return img_bytes, paper_size
+        
     except Exception as e:
-        raise Exception(f"Error during PDF to image conversion: {e}")
+        raise Exception(f"Erreur lors de la conversion PDF->Image: {e}")
     finally:
+        if pixmap:
+            pixmap = None
+        if doc:
+            doc.close()
         gc.collect()
+
 
 def clean_large_table(df: pd.DataFrame, keep_threshold: float = 0.05) -> pd.DataFrame:
     def is_numeric(val):
@@ -139,10 +131,7 @@ def clean_large_table(df: pd.DataFrame, keep_threshold: float = 0.05) -> pd.Data
 
     return cleaned
 
-
-
-
-def process_single_page(args: Tuple[str, int, str, int]) -> Tuple[int, List[Dict], str]:
+def process_single_page(args: Tuple[str, int, str, str, int]) -> Tuple[int, List[Dict], str]:
     """
     Traiter une seule page pour l'extraction de tableaux (pour le traitement parallèle).
     
@@ -155,19 +144,17 @@ def process_single_page(args: Tuple[str, int, str, int]) -> Tuple[int, List[Dict
     pdf_path, page_num, flavor, global_table_index_start = args
     
     try:
-        # Get paper size using the convert function - unpack all 3 return values
-        _, paper_size, _ = convert_pdf_to_image(
+        _, paper_size = convert_pdf_to_image(
             pdf_path, page_num, dpi=120
         )
         
-        # Use the original PDF file for Camelot extraction
         extraction_source = pdf_path
 
         tables = camelot.read_pdf(
-            extraction_source,
-            pages=str(page_num + 1),
-            flavor=flavor
-        )
+                extraction_source,
+                pages=str(page_num + 1),
+                flavor=flavor
+            )
         
         page_tables = []
         for i, table in enumerate(tables):
@@ -186,7 +173,6 @@ def process_single_page(args: Tuple[str, int, str, int]) -> Tuple[int, List[Dict
     except Exception as e:
         st.warning(f"Erreur lors du traitement de la page {page_num + 1}: {e}")
         return page_num, [], "Erreur"
-
 
 def extract_tables_from_pdf_parallel(pdf_path: str, page_nums: List[int] = None, flavor: str = "stream", 
                                     max_workers: int = 2) -> Tuple[Dict, List, Dict]:
@@ -222,27 +208,33 @@ def extract_tables_from_pdf_parallel(pdf_path: str, page_nums: List[int] = None,
         page_info = {}
         global_table_index = 0
         
-        # Create tasks for parallel processing
         tasks = []
         for page_num in page_nums:
             args = (pdf_path, page_num, flavor, global_table_index)
             tasks.append(args)
+            global_table_index += 3  
         
-        # Reset global index for proper sequential numbering
         global_table_index = 0
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_page = {executor.submit(process_single_page, task): task[1] for task in tasks}
             
-            # Process completed futures in order of completion
-            completed_pages = {}
-            
             for future in as_completed(future_to_page):
                 page_num = future_to_page[future]
                 try:
                     page_num_result, page_tables, paper_size = future.result()
-                    completed_pages[page_num_result] = (page_tables, paper_size)
                     
+                    for table_info in page_tables:
+                        table_info['global_index'] = global_table_index
+                        table_info['table_title'] = f"Tableau {global_table_index + 1} (Page {page_num_result + 1}, Tableau {table_info['page_index'] + 1})"
+                        global_table_index += 1
+                    
+                    all_tables[page_num_result] = page_tables
+                    page_info[page_num_result] = paper_size
+                    
+                    for table_info in page_tables:
+                        all_camelot_tables.append(table_info)                   
+
                     completed, total = progress_tracker.update()
                     progress = completed / total
                     progress_bar.progress(progress)
@@ -250,23 +242,6 @@ def extract_tables_from_pdf_parallel(pdf_path: str, page_nums: List[int] = None,
                     
                 except Exception as e:
                     st.error(f"Erreur lors du traitement de la page {page_num + 1}: {e}")
-            
-            # Process results in page order for consistent global indexing
-            for page_num in sorted(completed_pages.keys()):
-                page_tables, paper_size = completed_pages[page_num]
-                
-                # Update global indices in sequential order
-                for table_info in page_tables:
-                    table_info['global_index'] = global_table_index
-                    table_info['table_title'] = f"Tableau {global_table_index + 1} (Page {page_num + 1}, Tableau {table_info['page_index'] + 1})"
-                    global_table_index += 1
-                
-                all_tables[page_num] = page_tables
-                page_info[page_num] = paper_size
-                
-                # Add to the flat list
-                for table_info in page_tables:
-                    all_camelot_tables.append(table_info)
         
         progress_bar.empty()
         status_text.empty()
