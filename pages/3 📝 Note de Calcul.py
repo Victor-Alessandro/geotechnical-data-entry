@@ -1,7 +1,6 @@
 import streamlit as st
 import geopandas as gpd
 import pandas as pd
-import time
 import cv2
 
 
@@ -172,6 +171,9 @@ def render_pieux_dimensioning():
 
     if st.session_state.diameter_option == "Plusieurs diamètres":
         #too many global variables.
+
+        st.divider()
+        
         diameters_df = ndc.init_select_column(st.session_state.display_dataframes["diameters"][st.session_state.selection_diameters])
         diameter_options = available_columns( "diameters" )
 
@@ -180,8 +182,14 @@ def render_pieux_dimensioning():
     
         st.session_state.selected_dataframe = ndc.dataframe_with_selections( diameters_df )
 
+        if not st.session_state.selected_dataframe.empty:
+            st.write("🎯 Selection pour le béton:")
+            st.dataframe(st.session_state.selected_dataframe, use_container_width=True, hide_index=True)
+
     if st.session_state.horiz_excel:
-        # I could alias these names, but not doing so seems simpler more transparent. 
+        st.divider()
+
+        # I could alias these names, but not doing so seems simpler, more transparent. 
         horiz_defaults = [item for item in st.session_state.selection_horizontal if item in multiselect_options]
         st.session_state.selection_horizontal = st.multiselect('Colonnes du Tableau des Efforts Horizontales', multiselect_options, horiz_defaults)
 
@@ -290,38 +298,6 @@ def main():
     
     initialize_session_state()
     
-    if not (st.session_state.calculs_excel and st.session_state.plan_masse):
-        render_file_upload_section()
-    else:
-        render_data_entry_form()
-
-        col1, col2 = st.columns(2, vertical_alignment='center')
-
-        # the visibility of st.page_link sucks
-        with col1:
-            st.page_link('🔽 Téléchargements.py', label='**🔽 Téléchargements**')
-
-        with col2:
-           if st.button("🔄 Modifier les fichiers", key="back_to_upload", type='tertiary'):
-               st.session_state.calculs_excel= None
-               st.session_state.plan_de_masse = None
-               st.rerun()
-    
-        st.success("✅ Données prêtes pour la génération de la Note de Calcul.")
-
-
-def main():
-    """Main application function for NDC data input"""
-    st.set_page_config(
-        page_title="Générateur NDC Pieux", 
-        page_icon="🏗️", 
-        layout="wide",
-    )
-    
-    st.title("🏗️ Générateur de Notes de Calcul")
-    
-    initialize_session_state()
-    
     # Check if user has clicked proceed button AND required files are present
     should_show_main = (
         st.session_state.proceed_to_main and 
@@ -338,8 +314,12 @@ def main():
         with col1:
             st.page_link('🔽 Téléchargements.py', label='**🔽 Téléchargements**')
         with col2:
+
+           # modifying this might be needed but I'm not sure because of the global scope of session state
+           # namely, When defaults are loaded again after a new document gets uploaded do they fully override the previous state variables ?
+           # or are side effects left behind from the last use ?
            if st.button("🔄 Modifier les fichiers", key="back_to_upload", type='tertiary'):
-               # Reset all file-related session state
+
                st.session_state.calculs_excel = None
                st.session_state.plan_masse = None  # Fixed typo: was plan_de_masse
                st.session_state.horiz_excel = None

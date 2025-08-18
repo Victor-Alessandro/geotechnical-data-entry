@@ -17,19 +17,24 @@ RUN apk add --no-cache \
 # ensure pip is up-to-date
 RUN pip3 install --upgrade pip
 
+RUN hf download minishlab/potion-multilingual-128M M2V_base_output
+ENV MODEL2VEC_MODEL="minishlab/potion-multilingual-128M"
+
 WORKDIR /app
 
-# clone your repo (or you can COPY . . if building from local context)
+# clone your repo (without commit history i.e. depth 1)
 RUN git clone --depth 1 https://github.com/Victor-Alessandro/geotechnical-data-entry .
 
 # install python dependencies
 RUN pip3 install --no-cache-dir -r requirements.txt
 
+RUN python -m spacy download fr_core_news_sm
+
 #### Stage 2: Runtime ####
 FROM python:3.13-alpine3.18
 
 # copy over installed packages and app code from builder
-COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /app /app
 
 WORKDIR /app
@@ -42,4 +47,4 @@ HEALTHCHECK --interval=30s --timeout=5s \
   CMD curl --fail http://localhost:8501/_stcore/health || exit 1
 
 # default command to run your app; adjust the path to your main script as needed
-ENTRYPOINT ["streamlit", "run", "test.py", "--server.port=8501", "--server.address=0.0.0.0"]
+ENTRYPOINT ["streamlit", "run", "🔽 Téléchargements.py", "--server.port=8501", "--server.address=0.0.0.0"]
