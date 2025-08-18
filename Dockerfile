@@ -17,9 +17,6 @@ RUN apk add --no-cache \
 # ensure pip is up-to-date
 RUN pip3 install --upgrade pip
 
-RUN hf download minishlab/potion-multilingual-128M M2V_base_output
-ENV MODEL2VEC_MODEL="minishlab/potion-multilingual-128M"
-
 WORKDIR /app
 
 # clone your repo (without commit history i.e. depth 1)
@@ -29,6 +26,9 @@ RUN git clone --depth 1 https://github.com/Victor-Alessandro/geotechnical-data-e
 RUN pip3 install --no-cache-dir -r requirements.txt
 
 RUN python -m spacy download fr_core_news_sm
+
+RUN hf download minishlab/potion-multilingual-128M M2V_base_output
+ENV MODEL2VEC_MODEL="minishlab/potion-multilingual-128M"
 
 #### Stage 2: Runtime ####
 FROM python:3.13-alpine3.18
