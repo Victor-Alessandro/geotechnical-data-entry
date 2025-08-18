@@ -1,9 +1,9 @@
 import streamlit as st
 import pandas as pd
 import tempfile
-import fitz  # PyMuPDF
 import os
 
+from PyPDF2 import PdfReader
 from typing import  List
 from streamlit_extras.pdf_viewer import pdf_viewer
 from pydantic import create_model
@@ -41,8 +41,8 @@ def initialize_session_state():
         st.session_state.max_workers = 2
     if 'formatted_table' not in st.session_state:
         st.session_state.formatted_table = None
-    if 'final_dataframe' not in st.session_state:
-        st.session_state.final_dataframe = None
+    if 'final_ddc_data' not in st.session_state:
+        st.session_state.final_ddc_data = None
 
 def main():
     st.title(":classical_building: Descentes de Charges")
@@ -108,9 +108,8 @@ def main():
                         pdf_path = tmp_file.name
                     
                     try:
-                        pdf = fitz.open(pdf_path)
-                        num_pages = len(pdf)
-                        pdf.close()
+                        reader = PdfReader( pdf_path )
+                        num_pages = len( reader.pages )
                         
                         st.write(f"Document PDF avec **{num_pages} pages**")
                         
@@ -213,7 +212,7 @@ def main():
                            for _, list_of_tables in st.session_state.all_extracted_tables.items()
                            for table_info in list_of_tables]           
 
-            selected_table_name = st.selectbox("Tableau Sélectionné", table_titles)
+            selected_table_name = st.selectbox(" 🎯 Tableau Sélectionné", table_titles)
               
             for page_num, tables in st.session_state.all_extracted_tables.items():
                 page_info = st.session_state.page_info.get(page_num, "Format inconnu")
@@ -253,8 +252,9 @@ def main():
                     label="Colonnes à construire:",
                     options=[
                         'Q (Charges d\'Exploitation)', 'G (Charges Permanentes)',
+                        'Vent (Charges de Vent)', 'Neige (Charges de Neige)',
                         'V (Charges de Vent)', 'W (Charges de Vent)',
-                        'N (Charges de Neige)', 'S (Charges de Neige)',
+                        'Neige N (Charges de Neige)', 'S (Charges de Neige)',
                         'ELS (États Limites en Service)', 'ELU (États Limite Ultimes)',
                         'Sismique', 'S+', 'S-', 'Hsis', 'Vsis', 'Newmark', 'Fx', 'Fy', 'Fz',
                         'Moments', 'Mx', 'My', 'Mz', 'Vz', 'Vg', 'Vq', 'Vw', 'Vn', 'Hg','Hz','Hq','Hw', 'Hn', 'Verticale', 'Horizontale'                     
@@ -264,8 +264,8 @@ def main():
                     accept_new_options=True
                 )
 
-                complement_sys_prompt ="\nRépondez uniquement en JSON conforme au modèle DictFormat. Les keys du dictionnaire seront les noms des colonnes et son contenu les listes de valeurs que tu ira selectionner."
-                
+                complement_sys_prompt =  "\nVous devez répondre exclusivement en format JSON valide suivant le schéma DictFormat. Recuperez les listes des valeurs numériques qu'appartiennent aux colonnes indiqués précedemment." 
+
                 sys_prompt = st.text_area(
                     "La requête",
                     value=(
@@ -275,7 +275,6 @@ def main():
                     help=f"Texte du prompt système pour guider la réponse du modèle.\nContinue par:{complement_sys_prompt} "
                 )
 
-                
                 sys_prompt = sys_prompt + complement_sys_prompt
 
                 df = st.session_state.selected_ddc_table.apply( pd.to_numeric, errors='ignore')
@@ -292,7 +291,7 @@ def main():
                     formatting_agent = Agent[None, dict](
                         'gemini-2.0-flash',
                         output_type=DictFormat,
-                        sys_prompt=sys_prompt,
+                        system_prompt=sys_prompt,
                     )
             
                     result = formatting_agent.run_sync( prompt )
@@ -302,7 +301,7 @@ def main():
                 if st.button("Formater le tableau\n\rSélectionné"):
                     if st.session_state.all_extracted_tables:
                         try:
-                            st.session_state.final_dataframe = st.data_editor( format_dataframe( sys_prompt, prompt, df ))
+                            st.session_state.final_ddc_data = st.data_editor( format_dataframe( sys_prompt, prompt, df ))
                             st.success("Tableaux formatés et prêts pour édition!")
 
                         except Exception as e:
@@ -310,16 +309,14 @@ def main():
                     else:
                         st.error("Aucun tableau extrait. Extrayez d'abord les tableaux.")
 
-
-            
-        st.sidebar.subheader(":classical_building:  Statut")       
+                if len( column_names ) > 3:
+                   st.info( "Mérci de Télécharger directement les colonnes extraites.\n Après avoir glisser le souris sur le tableau, l'un des buttons indique 'Download as CSV'.") 
+           
+        st.sidebar.subheader(":classical_building:  Répartition des Tableaux")       
            
         if st.session_state.all_extracted_tables:
             total_tables = sum(len(tables) for tables in st.session_state.all_extracted_tables.values())
-            st.sidebar.success(f"✅ {total_tables} tableaux extraits")
             
-            # Show page breakdown
-            st.sidebar.markdown("**Répartition par page:**")
             for page_num, tables in st.session_state.all_extracted_tables.items():
                 st.sidebar.text(f"Page {page_num + 1}: {len(tables)} tableaux")
         else:
