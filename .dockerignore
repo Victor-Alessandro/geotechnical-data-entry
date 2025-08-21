@@ -1,0 +1,14 @@
+.git
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.whl
+*.tar.gz
+*.zip
+.vscode
+.env
+.idea
+data/
+models/
+notebooks/
